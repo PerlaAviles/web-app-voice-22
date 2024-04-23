@@ -1,85 +1,112 @@
 document.addEventListener('DOMContentLoaded', function () {
-    // Obtener referencias a los elementos del DOM
-    const btnEjecutar = document.getElementById('btnEjecutar');
-    const comandoInput = document.getElementById('comando');
-    const resultadoDiv = document.getElementById('resultado');
+    const resultDiv = document.getElementById('result');
 
-    // Función para ejecutar comando por voz y almacenarlo en MockAPI.io
-    function ejecutarComando(comando) {
-        switch (comando.toLowerCase()) {
-            // Casos para comandos conocidos
-            case 'brir nueva pestaña':
-                window.open('about:blank', '_blank');
-                break;
-            case 'ir a google':
-                window.location.href = 'https://www.google.com';
-                break;
-            case 'cerrar pestaña':
+    // Comprobar si el navegador admite la API de reconocimiento de voz
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+
+        // Definir configuraciones del reconocimiento de voz
+        // Configurar el idioma a español
+        recognition.lang = 'es-ES';
+
+        // Escuchar cuando se haya detectado un resultado
+        recognition.onresult = function (event) {
+            const transcript = event.results[0][0].transcript.toLowerCase();
+            console.log('Transcripción de voz:', transcript);
+
+            // Ejecutar acciones según el comando de voz
+            if (transcript.includes('abrir nueva pestaña')) {
+                window.open('', '_blank');
+                resultDiv.innerHTML = '<p>Nueva pestaña abierta.</p>';
+            } else if (transcript.includes('ir a')) {
+                const url = obtenerUrl(transcript);
+                if (url) {
+                    window.location.href = url;
+                    resultDiv.innerHTML = `<p>Redirigiendo a <strong>${url}</strong>.</p>`;
+                } else {
+                    resultDiv.innerHTML = '<p>Error: No se proporcionó una URL válida.</p>';
+                }
+            } else if (transcript.includes('cerrar pestaña')) {
                 window.close();
-                break;
-            case 'cerrar navegador':
+                resultDiv.innerHTML = '<p>Pestaña cerrada.</p>';
+            } else if (transcript.includes('cerrar navegador')) {
                 window.open('', '_self', '');
                 window.close();
-                break;
-            case 'maximizar ventana':
-                window.moveTo(0, 0);
-                window.resizeTo(screen.width, screen.height);
-                break;
-            case 'minimizar ventana':
-                window.resizeTo(200, 200);
-                break;
-            default:
-                // Si el comando no se reconoce, almacenarlo en MockAPI.io
-                guardarComandoEnMockAPI(comando);
-                resultadoDiv.textContent = 'Comando no reconocido';
-                break;
-        }
-    }
+                resultDiv.innerHTML = '<p>Navegador cerrado.</p>';
+            } else if (transcript.includes('tamaño')) {
+                const palabras = transcript.split(' ');
+                const indexTamaño = palabras.indexOf('tamaño');
 
-    // Función para guardar el comando en MockAPI.io
-    function guardarComandoEnMockAPI(comando) {
-        fetch('https://661535eab8b8e32ffc7a450b.mockapi.io/POST/comando', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ comando: comando })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Error al almacenar el comando en MockAPI.io');
+                // Obtener el tamaño de letra especificado en el comando
+                const tamaño = parseInt(palabras[indexTamaño + 1]);
+
+                // Aplicar el tamaño de letra al elemento de controlTexto
+                if (!isNaN(tamaño)) {
+                    document.body.style.fontSize = tamaño + 'px';
+                    resultDiv.innerHTML = `<p>Tamaño de letra cambiado a <strong>${tamaño}px</strong>.</p>`;
+                } else {
+                    resultDiv.innerHTML = '<p>Error: No se proporcionó un tamaño válido.</p>';
+                }
+            } else {
+                resultDiv.innerHTML = '<p>Comando no reconocido.</p>';
             }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Comando almacenado en MockAPI.io:', data);
-        })
-        .catch(error => {
-            console.error('Error:', error);
+
+            // Enviar el comando de voz a MockAPI junto con la fecha y hora actual
+            enviarComandoAVoz(transcript, obtenerFechaHoraActual());
+        };
+
+        // Escuchar errores
+        recognition.onerror = function (event) {
+            console.error('Error de reconocimiento de voz:', event.error);
+            resultDiv.innerHTML = '<p>Error al procesar la orden de voz. Por favor, inténtalo de nuevo.</p>';
+        };
+
+        // Iniciar el reconocimiento de voz cuando se haga clic en cualquier parte del documento
+        document.body.addEventListener('click', function () {
+            recognition.start();
+            resultDiv.innerHTML = '<p>Escuchando... Di tu orden.</p>';
         });
+    } else {
+        // Si el navegador no admite la API de reconocimiento de voz, mostrar un mensaje de error
+        resultDiv.innerHTML = '<p>Tu navegador no admite la API de reconocimiento de voz. Por favor, actualízalo a una versión más reciente.</p>';
     }
-
-    // Función para manejar el evento de clic en el botón
-    btnEjecutar.addEventListener('click', function () {
-        const comando = comandoInput.value;
-        ejecutarComando(comando);
-    });
-
-    // Función para manejar el evento de reconocimiento de voz
-    function handleVoiceCommand(event) {
-        const comando = event.results[0][0].transcript;
-        comandoInput.value = comando;
-        ejecutarComando(comando);
-    }
-
-    // Iniciar el reconocimiento de voz cuando se haga clic en el botón
-    btnEjecutar.addEventListener('click', function () {
-        const recognition = new webkitSpeechRecognition();
-        recognition.lang = 'es-ES';
-        recognition.start();
-        recognition.onresult = handleVoiceCommand;
-    });
-
 });
 
+// Función para obtener la URL de un comando
+function obtenerUrl(transcript) {
+    const palabras = transcript.split(' ');
+    const indexIrA = palabras.indexOf('ir') + 1;
+    return palabras.slice(indexIrA).join(' ');
+}
 
+// Función para obtener la fecha y hora actual en el formato deseado
+function obtenerFechaHoraActual() {
+    const fechaHora = new Date().toISOString().split('T');
+    return {
+        fecha: fechaHora[0],
+        hora: fechaHora[1].slice(0, 8) // Para obtener solo la hora en formato HH:MM:SS
+    };
+}
+
+// Función para enviar el comando de voz a MockAPI
+function enviarComandoAVoz(comando, fechaHora) {
+    fetch('https://662752e1b625bf088c07f777.mockapi.io/webappvoice', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            comando: comando,
+            fecha: fechaHora.fecha,
+            hora: fechaHora.hora
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Error al enviar el comando de voz a MockAPI');
+        }
+        console.log('Comando de voz enviado correctamente a MockAPI');
+    })
+    .catch(error => console.error('Error:', error));
+}
